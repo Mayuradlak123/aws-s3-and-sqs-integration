@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+.github
+*.md
+Dockerfile
+.dockerignore
+test-upload.html
+dashboard.html
+env.example
+.env.example
+task-definition.json
+C:\Users\lenovo\.gemini\antigravity\brain\

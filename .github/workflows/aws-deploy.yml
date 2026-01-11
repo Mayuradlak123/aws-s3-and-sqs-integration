@@ -1,0 +1,67 @@
+name: Deploy to Kubernetes (EC2)
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: express-app-repo
+  K8S_NAMESPACE: node-app
+  DEPLOYMENT_NAME: node-app
+  CONTAINER_NAME: node-app
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & Deploy to Kubernetes
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 🔐 AWS Auth (for ECR)
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    # 🔑 Login to ECR
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # 🐳 Build & Push Docker Image
+    - name: Build and Push Docker Image
+      env:
+        ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    # ☸️ Setup kubectl
+    - name: Setup kubectl
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+
+    # 🚀 Deploy to Kubernetes
+    - name: Update Kubernetes Deployment
+      env:
+        ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        kubectl set image deployment/${{ env.DEPLOYMENT_NAME }} \
+          ${{ env.CONTAINER_NAME }}=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          -n ${{ env.K8S_NAMESPACE }}
+
+    # ✅ Verify rollout
+    - name: Verify Deployment
+      run: |
+        kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.K8S_NAMESPACE }}

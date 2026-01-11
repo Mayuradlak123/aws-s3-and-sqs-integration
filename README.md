@@ -182,6 +182,31 @@ The server will start on `http://localhost:3000` (or the port specified in your 
    - Ensure your IAM user has `AmazonSQSFullAccess` or a custom policy with `sqs:SendMessage`, `sqs:ReceiveMessage`, and `sqs:DeleteMessage`.
 
 
+---
+
+## Cloud Deployment (AWS ECS)
+
+This application is configured for automated deployment to **AWS ECS (Fargate)** using **GitHub Actions**.
+
+### 1. Prerequisites
+- **Amazon ECR Repository**: Create a repository named `express-app-repo`.
+- **Amazon ECS Cluster**: Create a cluster named `express-app-cluster`.
+- **Amazon ECS Service**: Create a Fargate service named `express-app-service` within the cluster.
+- **IAM Roles**: Ensure `ecsTaskExecutionRole` exists.
+
+### 2. GitHub Secrets
+Add the following secrets to your GitHub repository:
+- `AWS_ACCESS_KEY_ID`: Your AWS access key.
+- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key.
+
+### 3. Pipeline Configuration
+The pipeline is defined in `.github/workflows/aws-deploy.yml`. It triggers on every push to the `main` branch:
+1. Builds the Docker image.
+2. Pushes the image to **Amazon ECR**.
+3. Deploys the new image to the **ECS Service**.
+
+---
+
 ## Project Structure
 
 ```
