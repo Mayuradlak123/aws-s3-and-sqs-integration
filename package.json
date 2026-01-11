@@ -1,0 +1,27 @@
+{
+  "name": "expess-app",
+  "version": "1.0.0",
+  "description": "Basic Express js application to test AWS S3 with cloudfront env",
+  "license": "ISC",
+  "author": "Mayur Adlak",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.966.0",
+    "@aws-sdk/client-sqs": "^3.966.0",
+    "@aws-sdk/s3-request-presigner": "^3.966.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}

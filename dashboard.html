@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live SQS Monitoring Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+        }
+
+        .message-anim {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-[#f8fafc] text-slate-900 min-h-screen">
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 glass border-b border-slate-200 py-4 px-6">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div
+                    class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z">
+                        </path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight">Live SQS Dashboard</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <div id="status-indicator"
+                    class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+                    <div class="w-2 h-2 rounded-full bg-amber-500 animate-pulse transition-colors" id="dot"></div>
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-600"
+                        id="status-text">Connecting...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Sidebar: Send Message -->
+        <div class="lg:col-span-1 space-y-6">
+            <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                    Send Message
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Topic</label>
+                        <select id="topic-select"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none">
+                            <option value="general">General</option>
+                            <option value="updates">Updates</option>
+                            <option value="alerts">Alerts</option>
+                            <option value="analytics">Analytics</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5 ml-1">Message Body</label>
+                        <textarea id="message-body" rows="4" placeholder="Enter your message here..."
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none resize-none"></textarea>
+                    </div>
+                    <button onclick="publishMessage()" id="publish-btn"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50">
+                        Publish to Queue
+                    </button>
+                    <p class="text-[10px] text-slate-400 text-center italic mt-2">Messages are sent to AWS SQS and
+                        broadcasted back via Socket.io</p>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="bg-indigo-900 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 border border-indigo-800">
+                <h3 class="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-4">Session Stats</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-3xl font-bold" id="msg-count">0</p>
+                        <p class="text-indigo-300 text-[10px] font-bold uppercase">Messages Received</p>
+                    </div>
+                    <div>
+                        <p class="text-3xl font-bold" id="active-users">1</p>
+                        <p class="text-indigo-300 text-[10px] font-bold uppercase">Active Clients</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Message Feed -->
+        <div class="lg:col-span-2 space-y-4">
+            <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2 px-2">
+                    Live Message Feed
+                    <span
+                        class="inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700"
+                        id="feed-badge">Live</span>
+                </h2>
+                <button onclick="clearMessages()"
+                    class="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase px-3 py-1.5 rounded-lg hover:bg-slate-100">Clear
+                    All</button>
+            </div>
+
+            <div id="message-feed" class="space-y-4 min-h-[500px]">
+                <!-- Empty State -->
+                <div id="empty-state"
+                    class="flex flex-col items-center justify-center py-24 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-300">
+                    <svg class="w-16 h-16 mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4">
+                        </path>
+                    </svg>
+                    <p class="font-medium">Waiting for messages from SQS...</p>
+                    <p class="text-xs mt-1">Send a message from the sidebar to start</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const socket = io();
+        let messageCount = 0;
+
+        const dot = document.getElementById('dot');
+        const statusText = document.getElementById('status-text');
+        const feed = document.getElementById('message-feed');
+        const emptyState = document.getElementById('empty-state');
+        const countDisplay = document.getElementById('msg-count');
+
+        socket.on('connect', () => {
+            dot.classList.remove('bg-amber-500', 'bg-red-500');
+            dot.classList.add('bg-green-500');
+            statusText.textContent = 'Operational';
+        });
+
+        socket.on('disconnect', () => {
+            dot.classList.remove('bg-green-500', 'bg-amber-500');
+            dot.classList.add('bg-red-500');
+            statusText.textContent = 'Disconnected';
+        });
+
+        socket.on('message', (data) => {
+            if (emptyState) emptyState.remove();
+
+            messageCount++;
+            countDisplay.textContent = messageCount;
+
+            const msgEl = document.createElement('div');
+            msgEl.className = 'bg-white rounded-2xl p-5 shadow-sm border border-slate-200 message-anim flex gap-4';
+
+            const topicColors = {
+                general: 'bg-slate-100 text-slate-700 border-slate-200',
+                updates: 'bg-blue-50 text-blue-700 border-blue-200',
+                alerts: 'bg-red-50 text-red-700 border-red-200',
+                analytics: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            };
+
+            const colorClass = topicColors[data.topic] || topicColors.general;
+
+            msgEl.innerHTML = `
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center bg-slate-50 border border-slate-100 text-slate-400 font-bold text-sm">
+                        #${messageCount}
+                    </div>
+                </div>
+                <div class="flex-grow">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${colorClass} uppercase tracking-wider">${data.topic}</span>
+                        <span class="text-[10px] font-medium text-slate-400">${new Date(data.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <p class="text-sm text-slate-700 leading-relaxed">${data.text}</p>
+                    <div class="mt-3 pt-3 border-t border-slate-50 flex items-center gap-2">
+                        <span class="text-[10px] text-slate-400 font-medium">Origin ID: ${data.senderId || 'Cloud Endpoint'}</span>
+                    </div>
+                </div>
+            `;
+
+            feed.prepend(msgEl);
+
+            // Limit messages to 50
+            if (feed.children.length > 50) {
+                feed.lastElementChild.remove();
+            }
+        });
+
+        async function publishMessage() {
+            const body = document.getElementById('message-body');
+            const topic = document.getElementById('topic-select');
+            const btn = document.getElementById('publish-btn');
+
+            if (!body.value.trim()) return;
+
+            btn.disabled = true;
+            btn.innerHTML = 'Sending...';
+
+            socket.emit('send-message', {
+                text: body.value,
+                topic: topic.value
+            });
+
+            // Visual feedback
+            setTimeout(() => {
+                body.value = '';
+                btn.disabled = false;
+                btn.innerHTML = 'Publish to Queue';
+            }, 500);
+        }
+
+        function clearMessages() {
+            feed.innerHTML = '';
+            messageCount = 0;
+            countDisplay.textContent = '0';
+            feed.appendChild(emptyState);
+        }
+    </script>
+</body>
+
+</html>

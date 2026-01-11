@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S3 File Upload Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gradient-to-br from-purple-600 to-indigo-700 min-h-screen flex items-center justify-center p-5">
+    <div class="bg-white rounded-3xl shadow-2xl p-10 max-w-2xl w-full">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">🚀 S3 File Upload Test</h1>
+            <p class="text-gray-600 text-sm">Test your AWS S3 integration</p>
+        </div>
+
+        <!-- Single File Upload -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-purple-600 mb-4">📄 Single File Upload</h2>
+            <input type="file" id="singleFile" accept="image/*,.pdf,.doc,.docx"
+                class="w-full p-3 border-2 border-dashed border-purple-400 rounded-xl cursor-pointer hover:border-purple-600 hover:bg-purple-50 transition-all duration-300 mb-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200">
+            <button onclick="uploadSingleFile()" id="singleUploadBtn"
+                class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed">
+                Upload File
+            </button>
+            <div id="singleResult" class="hidden mt-4 p-4 rounded-xl"></div>
+        </div>
+
+        <!-- Multiple Files Upload -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold text-purple-600 mb-4">📁 Multiple Files Upload</h2>
+            <input type="file" id="multipleFiles" multiple accept="image/*,.pdf,.doc,.docx"
+                class="w-full p-3 border-2 border-dashed border-purple-400 rounded-xl cursor-pointer hover:border-purple-600 hover:bg-purple-50 transition-all duration-300 mb-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200">
+            <button onclick="uploadMultipleFiles()" id="multipleUploadBtn"
+                class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed">
+                Upload Files
+            </button>
+            <div id="multipleResult" class="hidden mt-4 p-4 rounded-xl"></div>
+        </div>
+
+        <!-- Get Signed URL -->
+        <div class="pt-8 border-t-2 border-gray-200">
+            <h2 class="text-xl font-semibold text-purple-600 mb-4"> Get Signed URL</h2>
+            <input type="text" id="fileKey" placeholder="Enter file key (e.g., uploads/1234567890-file.jpg)"
+                class="w-full p-3 border-2 border-gray-300 rounded-xl mb-4 focus:outline-none focus:border-purple-600 transition-colors duration-300">
+            <button onclick="getSignedUrl()" id="signedUrlBtn"
+                class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed">
+                Generate Signed URL
+            </button>
+            <div id="signedUrlResult" class="hidden mt-4 p-4 rounded-xl"></div>
+        </div>
+
+        <!-- Fetch File Directly -->
+        <div class="pt-8 border-t-2 border-gray-200 mt-8">
+            <h2 class="text-xl font-semibold text-purple-600 mb-4">🖼️ Fetch File Directly</h2>
+            <input type="text" id="fetchFileKey" placeholder="Enter file key (e.g., uploads/1234567890-file.jpg)"
+                class="w-full p-3 border-2 border-gray-300 rounded-xl mb-4 focus:outline-none focus:border-purple-600 transition-colors duration-300">
+            <button onclick="fetchFile()" id="fetchFileBtn"
+                class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed">
+                View/Download File
+            </button>
+            <div id="fetchResult" class="hidden mt-4 p-4 rounded-xl text-center"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api';
+
+        function showResult(elementId, success, message, data = null) {
+            const resultDiv = document.getElementById(elementId);
+            resultDiv.className = success
+                ? 'mt-4 p-4 rounded-xl bg-green-100 border border-green-300 text-green-800'
+                : 'mt-4 p-4 rounded-xl bg-red-100 border border-red-300 text-red-800';
+
+            resultDiv.innerHTML = `<strong class="block mb-2">${message}</strong>`;
+
+            if (data) {
+                if (data.cloudFrontUrl) {
+                    resultDiv.innerHTML += `
+                        <div class="mt-2 mb-4 p-3 bg-white bg-opacity-50 rounded-lg border border-green-200">
+                            <p class="text-xs font-bold text-green-700 uppercase mb-1">🚀 Cached CloudFront URL (Best for Retrieval):</p>
+                            <a href="${data.cloudFrontUrl}" target="_blank" class="text-sm font-mono break-all text-blue-600 underline">${data.cloudFrontUrl}</a>
+                        </div>
+                    `;
+                }
+                resultDiv.innerHTML += `<pre class="mt-2 bg-black bg-opacity-5 p-3 rounded-lg overflow-x-auto text-xs">${JSON.stringify(data, null, 2)}</pre>`;
+            }
+
+            resultDiv.classList.remove('hidden');
+        }
+
+        async function uploadSingleFile() {
+            const fileInput = document.getElementById('singleFile');
+            const btn = document.getElementById('singleUploadBtn');
+
+            if (!fileInput.files.length) {
+                showResult('singleResult', false, 'Please select a file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="inline-block w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showResult('singleResult', true, '✅ File uploaded successfully!', data.data);
+                } else {
+                    showResult('singleResult', false, '❌ Upload failed', data);
+                }
+            } catch (error) {
+                showResult('singleResult', false, '❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Upload File';
+            }
+        }
+
+        async function uploadMultipleFiles() {
+            const fileInput = document.getElementById('multipleFiles');
+            const btn = document.getElementById('multipleUploadBtn');
+
+            if (!fileInput.files.length) {
+                showResult('multipleResult', false, 'Please select files');
+                return;
+            }
+
+            const formData = new FormData();
+            for (let file of fileInput.files) {
+                formData.append('files', file);
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="inline-block w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/upload/multiple`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showResult('multipleResult', true, '✅ Files uploaded successfully!', data.data);
+                } else {
+                    showResult('multipleResult', false, '❌ Upload failed', data);
+                }
+            } catch (error) {
+                showResult('multipleResult', false, '❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Upload Files';
+            }
+        }
+
+        async function getSignedUrl() {
+            const fileKey = document.getElementById('fileKey').value.trim();
+            const btn = document.getElementById('signedUrlBtn');
+
+            if (!fileKey) {
+                showResult('signedUrlResult', false, 'Please enter a file key');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="inline-block w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/get-signed-url`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fileKey, expiresIn: 3600 })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showResult('signedUrlResult', true, '✅ Signed URL generated!', data.data);
+                } else {
+                    showResult('signedUrlResult', false, '❌ Failed to generate URL', data);
+                }
+            } catch (error) {
+                showResult('signedUrlResult', false, '❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Generate Signed URL';
+            }
+        }
+
+        async function fetchFile() {
+            const fileKey = document.getElementById('fetchFileKey').value.trim();
+            const btn = document.getElementById('fetchFileBtn');
+            const resultDiv = document.getElementById('fetchResult');
+
+            if (!fileKey) {
+                showResult('fetchResult', false, 'Please enter a file key');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="inline-block w-5 h-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div>';
+            resultDiv.innerHTML = '';
+            resultDiv.classList.add('hidden');
+
+            try {
+                // For fetching, we just redirect or show an iframe/img for simplicity
+                // but we also check if it exists first
+                const fetchUrl = `${API_BASE}/files/${fileKey}`;
+
+                // Show a preview if it's likely an image
+                const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileKey);
+
+                if (isImage) {
+                    resultDiv.innerHTML = `
+                        <div class="mb-4">
+                            <img src="${fetchUrl}" class="max-w-full h-auto rounded-lg shadow-md mx-auto" alt="Preview">
+                        </div>
+                        <a href="${fetchUrl}" target="_blank" class="text-purple-600 font-semibold underline">Open in new tab</a>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="mb-4 text-gray-700">File is ready for viewing/download.</p>
+                        <a href="${fetchUrl}" target="_blank" class="bg-purple-100 text-purple-700 py-2 px-4 rounded-lg font-semibold border border-purple-300 inline-block hover:bg-purple-200 transition-colors">Open / Download File</a>
+                    `;
+                }
+                resultDiv.classList.remove('hidden');
+                resultDiv.className = 'mt-4 p-4 rounded-xl bg-purple-50 border border-purple-200 text-purple-800 text-center';
+
+            } catch (error) {
+                showResult('fetchResult', false, '❌ Error: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'View/Download File';
+            }
+        }
+    </script>
+</body>
+
+</html>
